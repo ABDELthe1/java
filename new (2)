@@ -1,0 +1,106 @@
+Absolument. Voici le script SQL complet pour créer la base de données (csms_db_enhanced), les tables (stations, users), et insérer les données de test pour l'application csms_enhanced.
+
+Instructions :
+
+Ouvrez phpMyAdmin (via http://localhost/phpmyadmin avec XAMPP).
+
+Option A (Si la base csms_db_enhanced n'existe PAS) :
+
+Cliquez sur l'onglet "Bases de données".
+
+Entrez csms_db_enhanced dans le champ "Créer une base de données".
+
+Choisissez un interclassement (par exemple utf8mb4_general_ci).
+
+Cliquez sur "Créer".
+
+Sélectionnez la base de données csms_db_enhanced dans la liste de gauche.
+
+Option B (Si la base csms_db_enhanced existe DÉJÀ mais vous voulez repartir de zéro) :
+
+Sélectionnez la base de données csms_db_enhanced dans la liste de gauche.
+
+Allez dans l'onglet "SQL".
+
+Copiez et collez tout le script ci-dessous dans la zone de texte.
+
+Cliquez sur le bouton "Exécuter".
+
+Si vous venez de créer la base (Option A) :
+
+Assurez-vous que csms_db_enhanced est sélectionnée à gauche.
+
+Allez dans l'onglet "SQL".
+
+Copiez et collez tout le script ci-dessous dans la zone de texte.
+
+Cliquez sur le bouton "Exécuter".
+
+Script SQL :
+
+-- --------------------------------------------------------
+-- Base de données : `csms_db_enhanced`
+-- Assurez-vous que cette base de données existe avant d'exécuter le reste.
+-- Vous pouvez la créer via phpMyAdmin ou avec :
+-- CREATE DATABASE IF NOT EXISTS csms_db_enhanced DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+-- USE csms_db_enhanced;
+-- --------------------------------------------------------
+
+-- Supprime les tables si elles existent déjà pour permettre une réexécution propre
+DROP TABLE IF EXISTS `stations`;
+DROP TABLE IF EXISTS `users`;
+
+
+-- --------------------------------------------------------
+-- Structure de la table `stations`
+-- --------------------------------------------------------
+
+CREATE TABLE `stations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nom` varchar(255) NOT NULL,
+  `localisation` varchar(255) DEFAULT NULL,
+  `statut` enum('DISPONIBLE','EN_CHARGE','HORS_SERVICE') NOT NULL DEFAULT 'DISPONIBLE',
+  `derniere_mise_a_jour` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Table contenant les informations des stations de charge';
+
+
+-- --------------------------------------------------------
+-- Structure de la table `users`
+-- --------------------------------------------------------
+
+CREATE TABLE `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `username` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL COMMENT 'ATTENTION: Mot de passe stocké en clair - NON SECURISE ! Utiliser bcrypt en production.',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username_unique` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Table pour l''authentification des utilisateurs';
+
+
+-- --------------------------------------------------------
+-- Insertion des données de test
+-- --------------------------------------------------------
+
+-- Données pour la table `stations`
+INSERT INTO `stations` (`nom`, `localisation`, `statut`) VALUES
+('Borne Alpha', '1 Rue Principale', 'DISPONIBLE'),
+('Borne Beta', 'Parking Centre Commercial', 'EN_CHARGE'),
+('Borne Gamma', 'Zone Industrielle Nord', 'HORS_SERVICE'),
+('Borne Delta', 'Place de la Gare', 'DISPONIBLE');
+
+-- Données pour la table `users`
+-- RAPPEL: Ne JAMAIS stocker de mots de passe en clair en production.
+INSERT INTO `users` (`username`, `password`) VALUES
+('admin', 'password');
+
+
+-- --------------------------------------------------------
+-- Affichage de messages (optionnel, pour la console mysql)
+-- --------------------------------------------------------
+SELECT 'Script de création de la base de données csms_db_enhanced exécuté avec succès.' AS 'Message';
+SELECT COUNT(*) AS 'Nombre de stations créées' FROM stations;
+SELECT COUNT(*) AS 'Nombre d''utilisateurs créés' FROM users;
+
+
+Après avoir exécuté ce script, votre base de données csms_db_enhanced sera prête avec les tables stations et users correctement structurées et contenant les données de test initiales nécessaires au fonctionnement de l'application Java csms_enhanced.
