@@ -5,41 +5,47 @@ import com.example.csms.model.Statut;
 import com.example.csms.model.Station;
 import com.example.csms.service.StationService;
 
+// PDF imports (you'll need to add iText library to classpath)
+import com.itextpdf.text.*;
+import com.itextpdf.text.pdf.*;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
-import javax.swing.table.TableModel; // Import pour l'export CSV
+import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.Rectangle;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Clipboard;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.WindowAdapter; // Pour sauvegarder la taille/position
-import java.awt.event.WindowEvent; // Pour sauvegarder la taille/position
-import java.io.BufferedWriter; // Pour Export CSV
-import java.io.File; // Pour Export CSV
-import java.io.FileWriter; // Pour Export CSV
-import java.io.IOException; // Pour Export CSV
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays; // Pour la suppression multiple
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Vector;
-import java.util.prefs.Preferences; // Pour sauvegarder la taille/position
+import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 
 public class MainAppFrame extends JFrame {
 
     private final StationService stationService;
+    private final boolean isAuthenticated; // Mode utilisateur: true = admin, false = invité
+
     private JTable stationTable;
     private DefaultTableModel tableModel;
     private JTextField searchField;
     private JButton searchButton;
     private JButton refreshButton;
     private JButton viewDetailsButton;
-    private JButton addButton; // Rendre accessible pour les tooltips etc.
+    private JButton addButton;
     private JButton editButton;
     private JButton deleteButton;
     private TableRowSorter<DefaultTableModel> sorter;
@@ -65,23 +71,22 @@ public class MainAppFrame extends JFrame {
     private static final int DEFAULT_WIDTH = 1000;
     private static final int DEFAULT_HEIGHT = 750;
 
-
-    public MainAppFrame() {
+    public MainAppFrame(boolean isAuthenticated) {
         this.stationService = new StationService();
+        this.isAuthenticated = isAuthenticated;
 
-        setTitle("Gestionnaire de Stations de Charge v0.4"); // Version
-        // Ne pas définir la taille ici, on le fera après avoir lu les préférences
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); // Gérer la fermeture manuellement pour sauvegarder
-        // loadPreferences(); // Appeler pour charger taille/position AVANT setLocationRelativeTo
+        String modeText = isAuthenticated ? "Mode Administrateur" : "Mode Invité";
+        setTitle("Gestionnaire de Stations de Charge v0.5 - " + modeText);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
         // --- Menu Bar ---
         JMenuBar menuBar = new JMenuBar();
         JMenu fileMenu = new JMenu("Fichier");
-        JMenuItem exportCsvItem = new JMenuItem("Exporter Vue Actuelle (CSV)..."); // Nouvelle option
-        exportCsvItem.addActionListener(e -> exportTableToCsv()); // Action pour l'export
+        JMenuItem exportPdfItem = new JMenuItem("Exporter Vue Actuelle (PDF)...");
+        exportPdfItem.addActionListener(e -> exportTableToPdf());
         JMenuItem exitItem = new JMenuItem("Quitter");
-        exitItem.addActionListener(e -> closeApplication()); // Action pour quitter proprement
-        fileMenu.add(exportCsvItem); // Ajout de l'export
+        exitItem.addActionListener(e -> closeApplication());
+        fileMenu.add(exportPdfItem);
         fileMenu.addSeparator();
         fileMenu.add(exitItem);
 
@@ -104,7 +109,6 @@ public class MainAppFrame extends JFrame {
             }
         };
         stationTable = new JTable(tableModel);
-        // Permettre la sélection multiple pour la suppression groupée
         stationTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         stationTable.setAutoCreateRowSorter(true);
         stationTable.setFillsViewportHeight(true);
@@ -118,23 +122,24 @@ public class MainAppFrame extends JFrame {
 
         JScrollPane scrollPane = new JScrollPane(stationTable);
 
-        // --- Menu Contextuel ---
-        createTablePopupMenu();
-        stationTable.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e) { maybeShowPopup(e); }
-            @Override public void mouseReleased(MouseEvent e) { maybeShowPopup(e); }
-            private void maybeShowPopup(MouseEvent e) {
-                if (e.isPopupTrigger()) {
-                    int rowAtPoint = stationTable.rowAtPoint(e.getPoint());
-                    // Si le clic est sur une ligne non sélectionnée, on sélectionne UNIQUEMENT cette ligne
-                    if (rowAtPoint >= 0 && !stationTable.isRowSelected(rowAtPoint)) {
-                        stationTable.setRowSelectionInterval(rowAtPoint, rowAtPoint);
+        // --- Menu Contextuel (seulement pour utilisateurs authentifiés) ---
+        if (isAuthenticated) {
+            createTablePopupMenu();
+            stationTable.addMouseListener(new MouseAdapter() {
+                @Override public void mousePressed(MouseEvent e) { maybeShowPopup(e); }
+                @Override public void mouseReleased(MouseEvent e) { maybeShowPopup(e); }
+                private void maybeShowPopup(MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        int rowAtPoint = stationTable.rowAtPoint(e.getPoint());
+                        if (rowAtPoint >= 0 && !stationTable.isRowSelected(rowAtPoint)) {
+                            stationTable.setRowSelectionInterval(rowAtPoint, rowAtPoint);
+                        }
+                        updatePopupMenuState();
+                        tablePopupMenu.show(e.getComponent(), e.getX(), e.getY());
                     }
-                    updatePopupMenuState(); // Met à jour l'état activé/désactivé
-                    tablePopupMenu.show(e.getComponent(), e.getX(), e.getY());
                 }
-            }
-        });
+            });
+        }
 
         // --- Panneau de Contrôle (Haut) ---
         JPanel controlPanel = new JPanel(new BorderLayout(10, 5));
@@ -142,9 +147,9 @@ public class MainAppFrame extends JFrame {
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         filterPanel.add(new JLabel("Rechercher:"));
         searchField = new JTextField(20);
-        searchButton = new JButton("🔍 Chercher"); // Ajout icone unicode simple
+        searchButton = new JButton("🔍 Chercher");
         searchButton.setToolTipText("Rechercher dans le nom ou la localisation");
-        JButton clearSearchButton = new JButton("Effacer Filtres"); // Renommé
+        JButton clearSearchButton = new JButton("Effacer Filtres");
         clearSearchButton.setToolTipText("Effacer le critère de recherche et le filtre de statut");
         filterPanel.add(searchField);
         filterPanel.add(searchButton);
@@ -158,14 +163,14 @@ public class MainAppFrame extends JFrame {
         filterPanel.add(statusFilterComboBox);
 
         JPanel actionButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        refreshButton = new JButton("🔄 Rafraîchir"); // Ajout icone
+        refreshButton = new JButton("🔄 Rafraîchir");
         refreshButton.setToolTipText("Recharger les données depuis la base");
-        viewDetailsButton = new JButton("ℹ️ Voir Détails"); // Ajout icone
+        viewDetailsButton = new JButton("ℹ️ Voir Détails");
         viewDetailsButton.setToolTipText("Afficher les détails de la station sélectionnée (une seule)");
         actionButtonPanel.add(refreshButton);
         actionButtonPanel.add(viewDetailsButton);
 
-        controlPanel.add(filterPanel, BorderLayout.CENTER); // Filtres prennent plus de place
+        controlPanel.add(filterPanel, BorderLayout.CENTER);
         controlPanel.add(actionButtonPanel, BorderLayout.EAST);
 
         // --- Panneau de Statistiques ---
@@ -187,19 +192,35 @@ public class MainAppFrame extends JFrame {
         northPanel.add(controlPanel, BorderLayout.NORTH);
         northPanel.add(statsPanel, BorderLayout.SOUTH);
 
-        // --- Panneau de Boutons CRUD ---
+        // --- Panneau de Boutons CRUD (seulement pour utilisateurs authentifiés) ---
         JPanel crudButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         crudButtonPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
-        addButton = new JButton("➕ Ajouter Station"); // Ajout icone
-        addButton.setToolTipText("Ouvrir le formulaire pour ajouter une nouvelle station");
-        editButton = new JButton("✏️ Modifier Sélection"); // Ajout icone
-        editButton.setToolTipText("Ouvrir le formulaire pour modifier la station sélectionnée (une seule)");
-        deleteButton = new JButton("❌ Supprimer Sélection"); // Ajout icone
-        deleteButton.setToolTipText("Supprimer la ou les station(s) sélectionnée(s) (avec confirmation)");
 
-        crudButtonPanel.add(addButton);
-        crudButtonPanel.add(editButton);
-        crudButtonPanel.add(deleteButton);
+        if (isAuthenticated) {
+            addButton = new JButton("➕ Ajouter Station");
+            addButton.setToolTipText("Ouvrir le formulaire pour ajouter une nouvelle station");
+            editButton = new JButton("✏️ Modifier Sélection");
+            editButton.setToolTipText("Ouvrir le formulaire pour modifier la station sélectionnée (une seule)");
+            deleteButton = new JButton("❌ Supprimer Sélection");
+            deleteButton.setToolTipText("Supprimer la ou les station(s) sélectionnée(s) (avec confirmation)");
+
+            crudButtonPanel.add(addButton);
+            crudButtonPanel.add(editButton);
+            crudButtonPanel.add(deleteButton);
+        } else {
+            // Mode invité - Afficher un message informatif et bouton de connexion
+            JLabel guestLabel = new JLabel("Mode Invité - Consultation et Export PDF uniquement");
+            guestLabel.setForeground(Color.BLUE);
+            guestLabel.setFont(guestLabel.getFont().deriveFont(java.awt.Font.ITALIC));
+
+            JButton loginButton = new JButton("🔐 Se Connecter");
+            loginButton.setToolTipText("Se connecter pour accéder aux fonctions d'administration");
+            loginButton.addActionListener(e -> switchToAuthenticatedMode());
+
+            crudButtonPanel.add(guestLabel);
+            crudButtonPanel.add(Box.createHorizontalStrut(20));
+            crudButtonPanel.add(loginButton);
+        }
 
         // --- Barre de Statut ---
         statusBar = new JLabel("Prêt.");
@@ -217,34 +238,37 @@ public class MainAppFrame extends JFrame {
 
         // --- Actions ---
         refreshButton.addActionListener(e -> chargerDonneesEtFiltrer());
-        addButton.addActionListener(e -> ouvrirDialogueStation(null));
-        editButton.addActionListener(e -> ouvrirDialogueModificationSelectionUnique()); // Action spécifique pour édition
-        deleteButton.addActionListener(e -> supprimerStationsSelectionnees()); // Action pour suppression multiple
-        viewDetailsButton.addActionListener(e -> ouvrirDialogueDetailsSelectionUnique()); // Action spécifique pour détails
+        viewDetailsButton.addActionListener(e -> ouvrirDialogueDetailsSelectionUnique());
         searchButton.addActionListener(e -> appliquerFiltres());
         searchField.addActionListener(e -> appliquerFiltres());
         clearSearchButton.addActionListener(e -> {
             searchField.setText("");
             statusFilterComboBox.setSelectedIndex(0);
             appliquerFiltres();
-            searchField.requestFocusInWindow(); // Remet le focus sur la recherche
+            searchField.requestFocusInWindow();
         });
         statusFilterComboBox.addActionListener(e -> appliquerFiltres());
 
-        // --- Gestion Fermeture Fenêtre (Sauvegarde Préférences) ---
+        // Actions CRUD (seulement pour utilisateurs authentifiés)
+        if (isAuthenticated) {
+            addButton.addActionListener(e -> ouvrirDialogueStation(null));
+            editButton.addActionListener(e -> ouvrirDialogueModificationSelectionUnique());
+            deleteButton.addActionListener(e -> supprimerStationsSelectionnees());
+        }
+
+        // --- Gestion Fermeture Fenêtre ---
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                closeApplication(); // Appelle notre méthode propre
+                closeApplication();
             }
         });
 
-        // Charge les préférences et les données initiales
-        loadPreferences(); // Charger taille/position
-        chargerDonneesEtFiltrer(); // Charger les données
+        loadPreferences();
+        chargerDonneesEtFiltrer();
     }
 
-    // Création du menu contextuel
+    // Création du menu contextuel (seulement pour utilisateurs authentifiés)
     private void createTablePopupMenu() {
         tablePopupMenu = new JPopupMenu();
         changeStatusMenuItem = new JMenuItem("Changer Statut Rapide...");
@@ -256,22 +280,19 @@ public class MainAppFrame extends JFrame {
         tablePopupMenu.add(copyInfoMenuItem);
     }
 
-    // Mise à jour état du menu contextuel
     private void updatePopupMenuState() {
         int selectedRowCount = stationTable.getSelectedRowCount();
-        // Activé seulement si EXACTEMENT une ligne est sélectionnée
         changeStatusMenuItem.setEnabled(selectedRowCount == 1);
         copyInfoMenuItem.setEnabled(selectedRowCount == 1);
     }
 
-    // Méthode pour charger toutes les données puis appliquer les filtres locaux
     private void chargerDonneesEtFiltrer() {
         statusBar.setText("Chargement des données depuis la base...");
-        SwingUtilities.invokeLater(() -> { // Exécuter le chargement hors de l'EDT si long, mais ici simple
+        SwingUtilities.invokeLater(() -> {
             try {
                 allLoadedStations = stationService.trouverToutesLesStations();
-                appliquerFiltresLocaux(); // Applique les filtres sur la liste chargée
-                mettreAJourStatistiques(); // Met à jour les stats globales
+                appliquerFiltresLocaux();
+                mettreAJourStatistiques();
                 statusBar.setText(tableModel.getRowCount() + " station(s) affichée(s). Total global: " + allLoadedStations.size() + ".");
             } catch (DataAccessException e) {
                 handleDataAccessException("chargement des données", e);
@@ -287,13 +308,11 @@ public class MainAppFrame extends JFrame {
         });
     }
 
-    // Méthode pour appliquer les filtres (recherche texte + statut)
     private void appliquerFiltres() {
         appliquerFiltresLocaux();
         statusBar.setText(tableModel.getRowCount() + " station(s) affichée(s) sur " + allLoadedStations.size() + " (Filtres appliqués).");
     }
 
-    // Filtre la liste locale et met à jour la table
     private void appliquerFiltresLocaux() {
         String texteFiltre = searchField.getText().trim().toLowerCase();
         String statutFiltreDesc = (String) statusFilterComboBox.getSelectedItem();
@@ -309,7 +328,7 @@ public class MainAppFrame extends JFrame {
                 })
                 .collect(Collectors.toList());
 
-        tableModel.setRowCount(0); // Efface la table
+        tableModel.setRowCount(0);
         for (Station station : stationsFiltrees) {
             Vector<Object> row = new Vector<>();
             row.add(station.getId());
@@ -321,8 +340,9 @@ public class MainAppFrame extends JFrame {
         }
     }
 
-    // Ouvre le dialogue d'ajout/modif
+    // Méthodes CRUD (seulement disponibles pour utilisateurs authentifiés)
     private void ouvrirDialogueStation(Station stationAModifier) {
+        if (!isAuthenticated) return;
         StationDialog dialog = new StationDialog(this, stationService, stationAModifier);
         dialog.setVisible(true);
         if (dialog.isSucces()) {
@@ -332,8 +352,8 @@ public class MainAppFrame extends JFrame {
         }
     }
 
-    // Ouvre le dialogue pour MODIFIER (sélection unique requise)
     private void ouvrirDialogueModificationSelectionUnique() {
+        if (!isAuthenticated) return;
         if (stationTable.getSelectedRowCount() != 1) {
             JOptionPane.showMessageDialog(this, "Veuillez sélectionner EXACTEMENT une station à modifier.", "Sélection Invalide", JOptionPane.WARNING_MESSAGE);
             return;
@@ -347,7 +367,7 @@ public class MainAppFrame extends JFrame {
             Optional<Station> stationOpt = stationService.trouverStationParId(idStation);
             if (stationOpt.isPresent()) {
                 statusBar.setText("Prêt.");
-                ouvrirDialogueStation(stationOpt.get()); // Ouvre le dialogue en mode édition
+                ouvrirDialogueStation(stationOpt.get());
             } else {
                 handleStationNotFoundError();
             }
@@ -356,7 +376,6 @@ public class MainAppFrame extends JFrame {
         }
     }
 
-    // Ouvre le dialogue pour VOIR DETAILS (sélection unique requise)
     private void ouvrirDialogueDetailsSelectionUnique() {
         if (stationTable.getSelectedRowCount() != 1) {
             JOptionPane.showMessageDialog(this, "Veuillez sélectionner EXACTEMENT une station pour voir les détails.", "Sélection Invalide", JOptionPane.WARNING_MESSAGE);
@@ -381,20 +400,18 @@ public class MainAppFrame extends JFrame {
         }
     }
 
-    // Supprime la ou les station(s) sélectionnée(s)
     private void supprimerStationsSelectionnees() {
+        if (!isAuthenticated) return;
         int[] selectedRowsView = stationTable.getSelectedRows();
         if (selectedRowsView.length == 0) {
             JOptionPane.showMessageDialog(this, "Veuillez sélectionner au moins une station à supprimer.", "Aucune sélection", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        // Conversion des indices de vue en indices de modèle
         int[] selectedRowsModel = Arrays.stream(selectedRowsView)
                 .map(stationTable::convertRowIndexToModel)
                 .toArray();
 
-        // Récupération des IDs et noms pour confirmation
         StringBuilder confirmationMessage = new StringBuilder("Êtes-vous sûr de vouloir supprimer ");
         List<Long> idsToDelete = new ArrayList<>();
         if (selectedRowsModel.length == 1) {
@@ -411,7 +428,6 @@ public class MainAppFrame extends JFrame {
             }
         }
 
-
         int confirmation = JOptionPane.showConfirmDialog(this,
                 confirmationMessage.toString(),
                 "Confirmation Suppression Multiple", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
@@ -422,20 +438,19 @@ public class MainAppFrame extends JFrame {
             int failCount = 0;
             List<String> errors = new ArrayList<>();
 
-            // Boucle sur les IDs à supprimer
             for (long id : idsToDelete) {
                 try {
                     boolean deleted = stationService.supprimerStation(id);
                     if (deleted) {
                         successCount++;
                     } else {
-                        failCount++; // Normalement géré par exception mais sécurité
+                        failCount++;
                         errors.add("Échec suppression ID " + id + " (non trouvée?)");
                     }
                 } catch (DataAccessException e) {
                     failCount++;
                     errors.add("Erreur BDD suppression ID " + id + ": " + e.getMessage());
-                    e.printStackTrace(); // Log l'erreur complète
+                    e.printStackTrace();
                 } catch (Exception e) {
                     failCount++;
                     errors.add("Erreur inattendue suppression ID " + id + ": " + e.getMessage());
@@ -443,14 +458,12 @@ public class MainAppFrame extends JFrame {
                 }
             }
 
-            // Afficher un résumé
             StringBuilder resultMessage = new StringBuilder();
             if (successCount > 0) {
                 resultMessage.append(successCount).append(" station(s) supprimée(s) avec succès.\n");
             }
             if (failCount > 0) {
                 resultMessage.append(failCount).append(" suppression(s) échouée(s).\n");
-                // Afficher les erreurs détaillées si nécessaire
                 if (!errors.isEmpty()) {
                     resultMessage.append("Détails erreurs:\n");
                     errors.forEach(err -> resultMessage.append("- ").append(err).append("\n"));
@@ -460,16 +473,16 @@ public class MainAppFrame extends JFrame {
                 JOptionPane.showMessageDialog(this, resultMessage.toString(), "Succès Suppression", JOptionPane.INFORMATION_MESSAGE);
             }
 
-            chargerDonneesEtFiltrer(); // Rafraîchit la table
+            chargerDonneesEtFiltrer();
             statusBar.setText(successCount + "/" + idsToDelete.size() + " station(s) supprimée(s). " + tableModel.getRowCount() + " affichée(s).");
         } else {
             statusBar.setText("Suppression annulée.");
         }
     }
 
-    // Action pour le changement de statut rapide
     private void changerStatutRapideSelection() {
-        if (stationTable.getSelectedRowCount() != 1) return; // Vérification par sécurité
+        if (!isAuthenticated) return;
+        if (stationTable.getSelectedRowCount() != 1) return;
 
         int selectedRowView = stationTable.getSelectedRow();
         int selectedRowModel = stationTable.convertRowIndexToModel(selectedRowView);
@@ -491,7 +504,6 @@ public class MainAppFrame extends JFrame {
                 try {
                     boolean updated = stationService.updateStationStatus(idStation, nouveauStatut);
                     if (updated) {
-                        // MAJ directe dans le modèle et la liste locale
                         tableModel.setValueAt(nouveauStatut.getDescription(), selectedRowModel, 3);
                         allLoadedStations.stream().filter(s -> s.getId() == idStation).findFirst().ifPresent(s -> s.setStatut(nouveauStatut));
                         mettreAJourStatistiques();
@@ -509,15 +521,14 @@ public class MainAppFrame extends JFrame {
         } else { statusBar.setText("Changement de statut annulé."); }
     }
 
-    // Action pour copier les infos
     private void copierInfosSelection() {
-        if (stationTable.getSelectedRowCount() != 1) return; // Vérification
+        if (stationTable.getSelectedRowCount() != 1) return;
 
         int selectedRowView = stationTable.getSelectedRow();
         int selectedRowModel = stationTable.convertRowIndexToModel(selectedRowView);
         long id = (long) tableModel.getValueAt(selectedRowModel, 0);
         String nom = (String) tableModel.getValueAt(selectedRowModel, 1);
-        Object locObj = tableModel.getValueAt(selectedRowModel, 2); // Peut être null
+        Object locObj = tableModel.getValueAt(selectedRowModel, 2);
         String localisation = (locObj != null) ? locObj.toString() : "-";
 
         String textToCopy = String.format("ID: %d\nNom: %s\nLocalisation: %s", id, nom, localisation);
@@ -526,10 +537,9 @@ public class MainAppFrame extends JFrame {
         StringSelection stringSelection = new StringSelection(textToCopy);
         clipboard.setContents(stringSelection, null);
 
-        updateStatusBar("Infos ID " + id + " copiées.", 2500); // Message temporaire
+        updateStatusBar("Infos ID " + id + " copiées.", 2500);
     }
 
-    // Met à jour les labels de statistiques
     private void mettreAJourStatistiques() {
         try {
             Map<String, Long> stats = stationService.getStationStatistics();
@@ -551,28 +561,164 @@ public class MainAppFrame extends JFrame {
         outOfServiceStationsLabel.setText("Hors Service: Erreur");
     }
 
-    // Affiche la boîte de dialogue "À Propos"
     private void showAboutDialog() {
-        // Version du dialogue avec plus de détails sur les fonctionnalités
+        String accessMode = isAuthenticated ? "Administrateur (accès complet)" : "Invité (lecture seule)";
         JOptionPane.showMessageDialog(this,
-                "Gestionnaire de Stations de Charge v0.4\n\n" +
+                "Gestionnaire de Stations de Charge v0.5\n\n" +
+                        "Mode d'accès actuel: " + accessMode + "\n\n" +
                         "Fonctionnalités :\n" +
-                        "  - Authentification utilisateur\n" +
-                        "  - CRUD Stations (Ajout, Modif., Suppr.)\n" +
-                        "  - Consultation, Recherche, Filtrage par Statut\n" +
+                        "  - Authentification utilisateur + Mode invité\n" +
+                        "  - CRUD Stations (Admin uniquement)\n" +
+                        "  - Consultation, Recherche, Filtrage\n" +
                         "  - Statistiques globales\n" +
                         "  - Vue détaillée, Copie d'infos\n" +
-                        "  - Changement rapide de statut\n" +
-                        "  - Export CSV, Suppression multiple\n" +
+                        "  - Export PDF\n" +
                         "  - Persistance taille/position fenêtre\n\n" +
-                        "Technologies : Java, Swing, JDBC, MySQL\n\n" +
+                        "Technologies : Java, Swing, JDBC, MySQL, iText PDF\n\n" +
                         "ATTENTION : Sécurité des mots de passe basique (exemple).",
                 "À Propos de CSMS Enhanced",
                 JOptionPane.INFORMATION_MESSAGE);
     }
 
-    // --- Méthodes utilitaires pour la gestion des erreurs et préférences ---
+    // --- Export PDF ---
+    private void exportTableToPdf() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Exporter la vue actuelle en PDF");
+        fileChooser.setSelectedFile(new File("export_stations_" + System.currentTimeMillis() + ".pdf"));
 
+        int userSelection = fileChooser.showSaveDialog(this);
+
+        if (userSelection == JFileChooser.APPROVE_OPTION) {
+            File fileToSave = fileChooser.getSelectedFile();
+
+            if (!fileToSave.getName().toLowerCase().endsWith(".pdf")) {
+                fileToSave = new File(fileToSave.getParentFile(), fileToSave.getName() + ".pdf");
+            }
+
+            if (fileToSave.exists()) {
+                int response = JOptionPane.showConfirmDialog(this,
+                        "Le fichier '" + fileToSave.getName() + "' existe déjà.\nVoulez-vous le remplacer?",
+                        "Confirmer l'écrasement", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (response != JOptionPane.YES_OPTION) {
+                    statusBar.setText("Export PDF annulé.");
+                    return;
+                }
+            }
+
+            final File finalFileToSave = fileToSave;
+
+            statusBar.setText("Exportation en PDF vers " + finalFileToSave.getName() + "...");
+
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    Document document = new Document(PageSize.A4, 50, 50, 50, 50);
+                    PdfWriter.getInstance(document, new FileOutputStream(finalFileToSave));
+                    document.open();
+
+                    // Titre du document
+                    com.itextpdf.text.Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BaseColor.BLACK);
+                    Paragraph title = new Paragraph("Export des Stations de Charge", titleFont);
+                    title.setAlignment(Element.ALIGN_CENTER);
+                    title.setSpacingAfter(20);
+                    document.add(title);
+
+                    // Informations sur l'export
+                    com.itextpdf.text.Font infoFont = FontFactory.getFont(FontFactory.HELVETICA, 10, BaseColor.GRAY);
+                    String modeText = isAuthenticated ? "Mode Administrateur" : "Mode Invité";
+                    Paragraph info = new Paragraph("Généré le: " + new java.util.Date() + " | " + modeText, infoFont);
+                    info.setAlignment(Element.ALIGN_CENTER);
+                    info.setSpacingAfter(15);
+                    document.add(info);
+
+                    // Statistiques
+                    Map<String, Long> stats = stationService.getStationStatistics();
+                    com.itextpdf.text.Font statsFont = FontFactory.getFont(FontFactory.HELVETICA, 11, BaseColor.DARK_GRAY);
+                    Paragraph statsP = new Paragraph(
+                            "Statistiques: Total: " + stats.getOrDefault("TOTAL", 0L) +
+                                    " | Disponibles: " + stats.getOrDefault(Statut.DISPONIBLE.name(), 0L) +
+                                    " | En Charge: " + stats.getOrDefault(Statut.EN_CHARGE.name(), 0L) +
+                                    " | Hors Service: " + stats.getOrDefault(Statut.HORS_SERVICE.name(), 0L), statsFont);
+                    statsP.setAlignment(Element.ALIGN_CENTER);
+                    statsP.setSpacingAfter(20);
+                    document.add(statsP);
+
+                    // Tableau des données
+                    PdfPTable table = new PdfPTable(5); // 5 colonnes
+                    table.setWidthPercentage(100);
+                    table.setWidths(new float[]{1f, 3f, 3f, 2f, 2.5f}); // Largeurs relatives
+
+                    // En-têtes
+                    com.itextpdf.text.Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, BaseColor.WHITE);
+                    String[] headers = {"ID", "Nom", "Localisation", "Statut", "Dernière MàJ"};
+                    for (String header : headers) {
+                        PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+                        cell.setBackgroundColor(BaseColor.DARK_GRAY);
+                        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                        cell.setPadding(8);
+                        table.addCell(cell);
+                    }
+
+                    // Données
+                    com.itextpdf.text.Font dataFont = FontFactory.getFont(FontFactory.HELVETICA, 9, BaseColor.BLACK);
+                    int rowCount = stationTable.getRowCount();
+                    for (int i = 0; i < rowCount; i++) {
+                        for (int j = 0; j < 5; j++) {
+                            Object value = stationTable.getValueAt(i, j);
+                            String cellText = (value != null) ? value.toString() : "";
+
+                            PdfPCell cell = new PdfPCell(new Phrase(cellText, dataFont));
+                            cell.setPadding(5);
+
+                            // Coloration selon le statut (colonne 3)
+                            if (j == 3 && value != null) {
+                                String statusText = value.toString();
+                                if ("Disponible".equals(statusText)) {
+                                    cell.setBackgroundColor(new BaseColor(200, 255, 200));
+                                } else if ("En charge".equals(statusText)) {
+                                    cell.setBackgroundColor(new BaseColor(255, 230, 180));
+                                } else if ("Hors service".equals(statusText)) {
+                                    cell.setBackgroundColor(new BaseColor(255, 200, 200));
+                                }
+                            }
+
+                            if (j == 0) { // ID centré
+                                cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                            }
+
+                            table.addCell(cell);
+                        }
+                    }
+
+                    document.add(table);
+
+                    // Pied de page
+                    Paragraph footer = new Paragraph("\nNombre de stations affichées: " + rowCount, infoFont);
+                    footer.setAlignment(Element.ALIGN_RIGHT);
+                    footer.setSpacingBefore(15);
+                    document.add(footer);
+
+                    document.close();
+
+                    JOptionPane.showMessageDialog(this,
+                            "Données exportées avec succès vers :\n" + finalFileToSave.getAbsolutePath(),
+                            "Export PDF Réussi", JOptionPane.INFORMATION_MESSAGE);
+                    statusBar.setText("Export PDF terminé. " + tableModel.getRowCount() + " station(s) affichée(s).");
+
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this,
+                            "Erreur lors de l'exportation en PDF:\n" + ex.getMessage() +
+                                    "\nVérifiez que la bibliothèque iText est dans le classpath.",
+                            "Erreur d'Exportation", JOptionPane.ERROR_MESSAGE);
+                    statusBar.setText("Erreur lors de l'export PDF.");
+                    ex.printStackTrace();
+                }
+            });
+        } else {
+            statusBar.setText("Export PDF annulé par l'utilisateur.");
+        }
+    }
+
+    // --- Méthodes utilitaires ---
     private void handleDataAccessException(String operation, DataAccessException e) {
         JOptionPane.showMessageDialog(this, "Erreur Base de Données lors de: " + operation + "\n" + e.getMessage(), "Erreur BDD", JOptionPane.ERROR_MESSAGE);
         statusBar.setText("Erreur BDD pendant: " + operation);
@@ -592,15 +738,13 @@ public class MainAppFrame extends JFrame {
 
     private void handleStationNotFoundError() {
         JOptionPane.showMessageDialog(this, "La station sélectionnée n'a pas été trouvée (peut-être supprimée?).", "Erreur", JOptionPane.ERROR_MESSAGE);
-        chargerDonneesEtFiltrer(); // Rafraîchit
+        chargerDonneesEtFiltrer();
         statusBar.setText("Erreur: Station non trouvée.");
     }
 
-    // Met à jour la barre de statut et efface après un délai
     private void updateStatusBar(String message, int delayMillis) {
         statusBar.setText(message);
         Timer timer = new Timer(delayMillis, e -> {
-            // Vérifie si le message n'a pas été écrasé entre temps
             if (statusBar.getText().equals(message)) {
                 statusBar.setText("Prêt.");
             }
@@ -609,7 +753,6 @@ public class MainAppFrame extends JFrame {
         timer.start();
     }
 
-    // Sauvegarde la position et la taille de la fenêtre
     private void savePreferences() {
         Preferences prefs = Preferences.userNodeForPackage(MainAppFrame.class);
         Rectangle bounds = getBounds();
@@ -617,136 +760,56 @@ public class MainAppFrame extends JFrame {
         prefs.putInt(PREF_KEY_Y, bounds.y);
         prefs.putInt(PREF_KEY_WIDTH, bounds.width);
         prefs.putInt(PREF_KEY_HEIGHT, bounds.height);
-        // System.out.println("DEBUG: Préférences sauvegardées: " + bounds); // Décommenter pour debug
     }
 
-    // Charge la position et la taille de la fenêtre
     private void loadPreferences() {
         Preferences prefs = Preferences.userNodeForPackage(MainAppFrame.class);
-        int x = prefs.getInt(PREF_KEY_X, -1); // -1 pour indiquer non défini
+        int x = prefs.getInt(PREF_KEY_X, -1);
         int y = prefs.getInt(PREF_KEY_Y, -1);
         int width = prefs.getInt(PREF_KEY_WIDTH, DEFAULT_WIDTH);
         int height = prefs.getInt(PREF_KEY_HEIGHT, DEFAULT_HEIGHT);
 
-        // System.out.println("DEBUG: Préférences chargées: x="+x+", y="+y+", w="+width+", h="+height); // Décommenter pour debug
-
-        // Applique taille/position
         setSize(width, height);
         if (x != -1 && y != -1) {
-            // Vérifie si les coordonnées sont valides pour l'écran actuel (simple vérification)
             GraphicsConfiguration gc = getGraphicsConfiguration();
             Rectangle screenBounds = gc.getBounds();
             if (screenBounds.contains(x, y)) {
                 setLocation(x, y);
             } else {
-                setLocationRelativeTo(null); // Centre si hors écran
+                setLocationRelativeTo(null);
             }
         } else {
-            setLocationRelativeTo(null); // Centre si pas de position sauvegardée
+            setLocationRelativeTo(null);
         }
     }
 
-    // Méthode centralisée pour quitter l'application proprement
     private void closeApplication() {
-        savePreferences(); // Sauvegarde la taille/position
-        // Ferme la connexion BDD via le shutdown hook déjà en place dans MainApplication
-        System.exit(0); // Termine la JVM
+        savePreferences();
+        System.exit(0);
     }
 
+    // Méthode pour passer du mode invité au mode authentifié
+    private void switchToAuthenticatedMode() {
+        LoginDialog loginDialog = new LoginDialog(this);
+        loginDialog.setVisible(true);
 
-    // --- Export CSV ---
-    private void exportTableToCsv() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Exporter la vue actuelle en CSV");
-        fileChooser.setSelectedFile(new File("export_stations_" + System.currentTimeMillis() + ".csv"));
+        if (loginDialog.isAuthenticated()) {
+            // L'utilisateur s'est connecté avec succès
+            JOptionPane.showMessageDialog(this,
+                    "Connexion réussie ! L'application va redémarrer en mode administrateur.",
+                    "Connexion Réussie", JOptionPane.INFORMATION_MESSAGE);
 
-        int userSelection = fileChooser.showSaveDialog(this);
+            // Sauvegarder les préférences actuelles
+            savePreferences();
 
-        if (userSelection == JFileChooser.APPROVE_OPTION) {
-            File fileToSave = fileChooser.getSelectedFile(); // Variable locale initiale
+            // Fermer la fenêtre actuelle et relancer en mode authentifié
+            dispose();
 
-            // S'assurer que le fichier a l'extension .csv
-            if (!fileToSave.getName().toLowerCase().endsWith(".csv")) {
-                // Réassignation potentielle ici
-                fileToSave = new File(fileToSave.getParentFile(), fileToSave.getName() + ".csv");
-            }
-
-            // Confirmation si le fichier existe déjà
-            if (fileToSave.exists()) {
-                int response = JOptionPane.showConfirmDialog(this,
-                        "Le fichier '" + fileToSave.getName() + "' existe déjà.\nVoulez-vous le remplacer?",
-                        "Confirmer l'écrasement", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-                if (response != JOptionPane.YES_OPTION) {
-                    statusBar.setText("Export CSV annulé.");
-                    return;
-                }
-            }
-
-            // --- DEBUT DE LA CORRECTION ---
-            // Crée une nouvelle variable final (ou effectivement final)
-            // qui contient la valeur de fileToSave APRES ses modifications potentielles.
-            final File finalFileToSave = fileToSave;
-            // --- FIN DE LA CORRECTION ---
-
-            statusBar.setText("Exportation en CSV vers " + finalFileToSave.getName() + "..."); // Utilise la nouvelle variable
-
-            // Utiliser un thread séparé pour l'export si la table est très grande
             SwingUtilities.invokeLater(() -> {
-                // Utilise la variable final dans la lambda
-                try (BufferedWriter writer = new BufferedWriter(new FileWriter(finalFileToSave))) {
-                    TableModel model = stationTable.getModel();
-                    int columnCount = model.getColumnCount();
-
-                    // Écrire l'en-tête
-                    for (int i = 0; i < columnCount; i++) {
-                        writer.write(escapeCsvValue(model.getColumnName(i)));
-                        if (i < columnCount - 1) {
-                            writer.write(",");
-                        }
-                    }
-                    writer.newLine();
-
-                    // Écrire les lignes de données
-                    int rowCount = stationTable.getRowCount();
-                    for (int i = 0; i < rowCount; i++) {
-                        for (int j = 0; j < columnCount; j++) {
-                            Object value = stationTable.getValueAt(i, j);
-                            writer.write(escapeCsvValue(value != null ? value.toString() : ""));
-                            if (j < columnCount - 1) {
-                                writer.write(",");
-                            }
-                        }
-                        writer.newLine();
-                    }
-
-                    // Utilise la variable final dans la lambda
-                    JOptionPane.showMessageDialog(this,
-                            "Données exportées avec succès vers :\n" + finalFileToSave.getAbsolutePath(),
-                            "Export CSV Réussi", JOptionPane.INFORMATION_MESSAGE);
-                    statusBar.setText("Export CSV terminé. " + tableModel.getRowCount() + " station(s) affichée(s).");
-
-                } catch (IOException ex) {
-                    JOptionPane.showMessageDialog(this,
-                            "Erreur lors de l'exportation en CSV:\n" + ex.getMessage(),
-                            "Erreur d'Exportation", JOptionPane.ERROR_MESSAGE);
-                    statusBar.setText("Erreur lors de l'export CSV.");
-                    ex.printStackTrace();
-                }
+                MainAppFrame newFrame = new MainAppFrame(true); // Mode authentifié
+                newFrame.setVisible(true);
             });
-        } else {
-            statusBar.setText("Export CSV annulé par l'utilisateur.");
         }
-    }
-
-    // Méthode simple pour échapper les virgules et guillemets pour CSV
-    private String escapeCsvValue(String value) {
-        if (value == null) return "";
-        // Si la valeur contient une virgule, un guillemet ou un retour à la ligne, l'encadrer de guillemets
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            // Doubler les guillemets existants à l'intérieur
-            value = value.replace("\"", "\"\"");
-            return "\"" + value + "\"";
-        }
-        return value;
+        // Si la connexion échoue ou est annulée, on reste en mode invité
     }
 }

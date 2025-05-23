@@ -21,19 +21,28 @@ public class MainApplication {
         LoginDialog loginDialog = new LoginDialog(null); // null car pas de parent initial
         loginDialog.setVisible(true);
 
-        // Si l'authentification réussit, lancer la fenêtre principale
-        if (loginDialog.isAuthenticated()) {
-            // Lancer l'interface principale dans l'EDT
+        // Si l'authentification réussit OU si l'utilisateur choisit le mode invité, lancer la fenêtre principale
+        if (loginDialog.isAccessGranted()) {
+            boolean isAuthenticated = loginDialog.isAuthenticated();
+            boolean isGuestMode = loginDialog.isGuestMode();
+
+            // Afficher le mode d'accès dans la console pour debug
+            if (isAuthenticated) {
+                System.out.println("Application lancée en mode Administrateur (accès complet)");
+            } else if (isGuestMode) {
+                System.out.println("Application lancée en mode Invité (lecture seule)");
+            }
+
+            // Lancer l'interface principale dans l'EDT en passant le mode d'accès
             SwingUtilities.invokeLater(() -> {
-                MainAppFrame mainFrame = new MainAppFrame();
+                MainAppFrame mainFrame = new MainAppFrame(isAuthenticated);
                 mainFrame.setVisible(true);
             });
         } else {
             // L'utilisateur a fermé la boîte de dialogue ou annulé, on quitte
-            System.out.println("Authentification échouée ou annulée. Fermeture de l'application.");
+            System.out.println("Accès refusé ou annulé. Fermeture de l'application.");
             System.exit(0);
         }
-
 
         // Hook pour fermer la connexion BDD à la fin
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

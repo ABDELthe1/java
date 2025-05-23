@@ -15,9 +15,11 @@ public class LoginDialog extends JDialog {
     private JTextField usernameField;
     private JPasswordField passwordField;
     private JButton loginButton;
+    private JButton guestButton;
     private JButton cancelButton;
     private JLabel statusLabel;
     private boolean authenticated = false;
+    private boolean guestMode = false;
     private final AuthService authService;
 
     public LoginDialog(Frame parent) {
@@ -25,7 +27,7 @@ public class LoginDialog extends JDialog {
         this.authService = new AuthService();
 
         setLayout(new BorderLayout(10, 10)); // Ajoute des marges
-        setSize(350, 200);
+        setSize(380, 240);
         setLocationRelativeTo(parent);
         setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE); // Gérer la fermeture manuellement
 
@@ -54,10 +56,14 @@ public class LoginDialog extends JDialog {
         fieldsPanel.add(statusLabel, gbc);
 
         // Panel pour les boutons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         loginButton = new JButton("Connexion");
+        guestButton = new JButton("Continuer en tant qu'invité");
+        guestButton.setToolTipText("Accès en lecture seule - Voir les stations sans pouvoir les modifier");
         cancelButton = new JButton("Annuler");
+
         buttonPanel.add(loginButton);
+        buttonPanel.add(guestButton);
         buttonPanel.add(cancelButton);
 
         // Ajout des panels à la JDialog
@@ -67,6 +73,7 @@ public class LoginDialog extends JDialog {
         // --- Actions ---
         loginButton.addActionListener(e -> attemptLogin());
         passwordField.addActionListener(e -> attemptLogin()); // Permet de valider avec Entrée
+        guestButton.addActionListener(e -> continueAsGuest());
         cancelButton.addActionListener(e -> System.exit(0)); // Quitte l'application
 
         // Gérer la fermeture de la fenêtre (clic sur la croix)
@@ -76,13 +83,6 @@ public class LoginDialog extends JDialog {
                 System.exit(0); // Quitte l'application
             }
         });
-
-        // Affiche un avertissement crucial
-//        JOptionPane.showMessageDialog(this,
-//                "ATTENTION : Ce système utilise des mots de passe en clair pour la connexion.\n" +
-//                        "Ceci est extrêmement non sécurisé et ne doit JAMAIS être utilisé en production.\n" +
-//                        "Utilisateur de test : admin / password",
-//                "Avertissement de Sécurité Majeur", JOptionPane.WARNING_MESSAGE);
 
         pack(); // Ajuste la taille aux composants
     }
@@ -95,6 +95,7 @@ public class LoginDialog extends JDialog {
         try {
             if (authService.authenticate(username, password)) {
                 authenticated = true;
+                guestMode = false;
                 dispose(); // Ferme la boîte de dialogue si succès
             } else {
                 statusLabel.setText("Utilisateur ou mot de passe incorrect.");
@@ -105,7 +106,6 @@ public class LoginDialog extends JDialog {
             statusLabel.setText("Erreur de connexion à la base de données.");
             System.err.println("Erreur BDD pendant l'authentification: " + ex.getMessage());
             ex.printStackTrace();
-            // On pourrait afficher un JOptionPane plus détaillé ici
             JOptionPane.showMessageDialog(this,
                     "Impossible de vérifier les informations d'identification.\nErreur de base de données: " + ex.getMessage(),
                     "Erreur d'authentification", JOptionPane.ERROR_MESSAGE);
@@ -119,7 +119,31 @@ public class LoginDialog extends JDialog {
         }
     }
 
+    private void continueAsGuest() {
+        int confirmation = JOptionPane.showConfirmDialog(this,
+                "Mode Invité: Vous pourrez consulter les stations et exporter en PDF,\n" +
+                        "mais vous ne pourrez pas ajouter, modifier ou supprimer des stations.\n\n" +
+                        "Continuer en mode invité?",
+                "Confirmation Mode Invité",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.INFORMATION_MESSAGE);
+
+        if (confirmation == JOptionPane.YES_OPTION) {
+            authenticated = false;
+            guestMode = true;
+            dispose(); // Ferme la boîte de dialogue
+        }
+    }
+
     public boolean isAuthenticated() {
         return authenticated;
+    }
+
+    public boolean isGuestMode() {
+        return guestMode;
+    }
+
+    public boolean isAccessGranted() {
+        return authenticated || guestMode;
     }
 }
