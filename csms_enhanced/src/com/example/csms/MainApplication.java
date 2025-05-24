@@ -21,7 +21,7 @@ public class MainApplication {
         LoginDialog loginDialog = new LoginDialog(null); // null car pas de parent initial
         loginDialog.setVisible(true);
 
-        // Si l'authentification réussit OU si l'utilisateur choisit le mode invité, lancer la fenêtre principale
+        // Si l'authentification réussit OU si l'utilisateur choisit le mode visiteur, lancer la fenêtre principale
         if (loginDialog.isAccessGranted()) {
             boolean isAuthenticated = loginDialog.isAuthenticated();
             boolean isGuestMode = loginDialog.isGuestMode();
@@ -30,7 +30,7 @@ public class MainApplication {
             if (isAuthenticated) {
                 System.out.println("Application lancée en mode Administrateur (accès complet)");
             } else if (isGuestMode) {
-                System.out.println("Application lancée en mode Invité (lecture seule)");
+                System.out.println("Application lancée en mode visiteur (lecture seule)");
             }
 
             // Lancer l'interface principale dans l'EDT en passant le mode d'accès

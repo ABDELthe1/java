@@ -58,7 +58,7 @@ public class LoginDialog extends JDialog {
         // Panel pour les boutons
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         loginButton = new JButton("Connexion");
-        guestButton = new JButton("Continuer en tant qu'invité");
+        guestButton = new JButton("Continuer en tant que visiteur");
         guestButton.setToolTipText("Accès en lecture seule - Voir les stations sans pouvoir les modifier");
         cancelButton = new JButton("Annuler");
 
@@ -121,10 +121,10 @@ public class LoginDialog extends JDialog {
 
     private void continueAsGuest() {
         int confirmation = JOptionPane.showConfirmDialog(this,
-                "Mode Invité: Vous pourrez consulter les stations et exporter en PDF,\n" +
+                "Mode visiteur: Vous pourrez consulter les stations et exporter en PDF,\n" +
                         "mais vous ne pourrez pas ajouter, modifier ou supprimer des stations.\n\n" +
-                        "Continuer en mode invité?",
-                "Confirmation Mode Invité",
+                        "Continuer en mode visiteur?",
+                "Confirmation Mode visiteur",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.INFORMATION_MESSAGE);
 

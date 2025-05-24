@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 public class MainAppFrame extends JFrame {
 
     private final StationService stationService;
-    private final boolean isAuthenticated; // Mode utilisateur: true = admin, false = invité
+    private final boolean isAuthenticated; // Mode utilisateur: true = admin, false = visiteur
 
     private JTable stationTable;
     private DefaultTableModel tableModel;
@@ -75,7 +75,7 @@ public class MainAppFrame extends JFrame {
         this.stationService = new StationService();
         this.isAuthenticated = isAuthenticated;
 
-        String modeText = isAuthenticated ? "Mode Administrateur" : "Mode Invité";
+        String modeText = isAuthenticated ? "Mode Administrateur" : "Mode visiteur";
         setTitle("Gestionnaire de Stations de Charge v0.5 - " + modeText);
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
@@ -208,8 +208,8 @@ public class MainAppFrame extends JFrame {
             crudButtonPanel.add(editButton);
             crudButtonPanel.add(deleteButton);
         } else {
-            // Mode invité - Afficher un message informatif et bouton de connexion
-            JLabel guestLabel = new JLabel("Mode Invité - Consultation et Export PDF uniquement");
+            // Mode visiteur - Afficher un message informatif et bouton de connexion
+            JLabel guestLabel = new JLabel("Mode visiteur - Consultation et Export PDF uniquement");
             guestLabel.setForeground(Color.BLUE);
             guestLabel.setFont(guestLabel.getFont().deriveFont(java.awt.Font.ITALIC));
 
@@ -562,12 +562,12 @@ public class MainAppFrame extends JFrame {
     }
 
     private void showAboutDialog() {
-        String accessMode = isAuthenticated ? "Administrateur (accès complet)" : "Invité (lecture seule)";
+        String accessMode = isAuthenticated ? "Administrateur (accès complet)" : "visiteur (lecture seule)";
         JOptionPane.showMessageDialog(this,
                 "Gestionnaire de Stations de Charge v0.5\n\n" +
                         "Mode d'accès actuel: " + accessMode + "\n\n" +
                         "Fonctionnalités :\n" +
-                        "  - Authentification utilisateur + Mode invité\n" +
+                        "  - Authentification utilisateur + Mode visiteur\n" +
                         "  - CRUD Stations (Admin uniquement)\n" +
                         "  - Consultation, Recherche, Filtrage\n" +
                         "  - Statistiques globales\n" +
@@ -624,7 +624,7 @@ public class MainAppFrame extends JFrame {
 
                     // Informations sur l'export
                     com.itextpdf.text.Font infoFont = FontFactory.getFont(FontFactory.HELVETICA, 10, BaseColor.GRAY);
-                    String modeText = isAuthenticated ? "Mode Administrateur" : "Mode Invité";
+                    String modeText = isAuthenticated ? "Mode Administrateur" : "Mode visiteur";
                     Paragraph info = new Paragraph("Généré le: " + new java.util.Date() + " | " + modeText, infoFont);
                     info.setAlignment(Element.ALIGN_CENTER);
                     info.setSpacingAfter(15);
@@ -788,7 +788,7 @@ public class MainAppFrame extends JFrame {
         System.exit(0);
     }
 
-    // Méthode pour passer du mode invité au mode authentifié
+    // Méthode pour passer du mode visiteur au mode authentifié
     private void switchToAuthenticatedMode() {
         LoginDialog loginDialog = new LoginDialog(this);
         loginDialog.setVisible(true);
@@ -810,6 +810,6 @@ public class MainAppFrame extends JFrame {
                 newFrame.setVisible(true);
             });
         }
-        // Si la connexion échoue ou est annulée, on reste en mode invité
+        // Si la connexion échoue ou est annulée, on reste en mode visiteur
     }
 }
