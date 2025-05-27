@@ -100,11 +100,18 @@ public class MainAppFrame extends JFrame {
         setJMenuBar(menuBar);
 
         // --- Table Model et JTable ---
-        tableModel = new DefaultTableModel(new Object[]{"ID", "Nom", "Localisation", "Statut", "Dernière MàJ"}, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
-            @Override public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 4) return java.sql.Timestamp.class;
-                if (columnIndex == 3) return String.class;
+        tableModel = new DefaultTableModel(new Object[] { "ID", "Nom", "Localisation", "Statut", "Dernière MàJ" }, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 4)
+                    return java.sql.Timestamp.class;
+                if (columnIndex == 3)
+                    return String.class;
                 return super.getColumnClass(columnIndex);
             }
         };
@@ -126,8 +133,16 @@ public class MainAppFrame extends JFrame {
         if (isAuthenticated) {
             createTablePopupMenu();
             stationTable.addMouseListener(new MouseAdapter() {
-                @Override public void mousePressed(MouseEvent e) { maybeShowPopup(e); }
-                @Override public void mouseReleased(MouseEvent e) { maybeShowPopup(e); }
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    maybeShowPopup(e);
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    maybeShowPopup(e);
+                }
+
                 private void maybeShowPopup(MouseEvent e) {
                     if (e.isPopupTrigger()) {
                         int rowAtPoint = stationTable.rowAtPoint(e.getPoint());
@@ -158,7 +173,9 @@ public class MainAppFrame extends JFrame {
         filterPanel.add(new JLabel("Filtrer Statut:"));
         statusFilterComboBox = new JComboBox<>();
         statusFilterComboBox.addItem("Tous");
-        for (Statut s : Statut.values()) { statusFilterComboBox.addItem(s.getDescription()); }
+        for (Statut s : Statut.values()) {
+            statusFilterComboBox.addItem(s.getDescription());
+        }
         statusFilterComboBox.setToolTipText("Filtrer la vue par statut");
         filterPanel.add(statusFilterComboBox);
 
@@ -209,7 +226,7 @@ public class MainAppFrame extends JFrame {
             crudButtonPanel.add(deleteButton);
         } else {
             // Mode visiteur - Afficher un message informatif et bouton de connexion
-            JLabel guestLabel = new JLabel("Mode visiteur - Consultation et Export PDF uniquement");
+            JLabel guestLabel = new JLabel("Mode visiteur ");
             guestLabel.setForeground(Color.BLUE);
             guestLabel.setFont(guestLabel.getFont().deriveFont(java.awt.Font.ITALIC));
 
@@ -293,7 +310,8 @@ public class MainAppFrame extends JFrame {
                 allLoadedStations = stationService.trouverToutesLesStations();
                 appliquerFiltresLocaux();
                 mettreAJourStatistiques();
-                statusBar.setText(tableModel.getRowCount() + " station(s) affichée(s). Total global: " + allLoadedStations.size() + ".");
+                statusBar.setText(tableModel.getRowCount() + " station(s) affichée(s). Total global: "
+                        + allLoadedStations.size() + ".");
             } catch (DataAccessException e) {
                 handleDataAccessException("chargement des données", e);
                 allLoadedStations.clear();
@@ -310,7 +328,8 @@ public class MainAppFrame extends JFrame {
 
     private void appliquerFiltres() {
         appliquerFiltresLocaux();
-        statusBar.setText(tableModel.getRowCount() + " station(s) affichée(s) sur " + allLoadedStations.size() + " (Filtres appliqués).");
+        statusBar.setText(tableModel.getRowCount() + " station(s) affichée(s) sur " + allLoadedStations.size()
+                + " (Filtres appliqués).");
     }
 
     private void appliquerFiltresLocaux() {
@@ -322,8 +341,10 @@ public class MainAppFrame extends JFrame {
                 .filter(station -> {
                     boolean matchTexte = texteFiltre.isEmpty() ||
                             (station.getNom() != null && station.getNom().toLowerCase().contains(texteFiltre)) ||
-                            (station.getLocalisation() != null && station.getLocalisation().toLowerCase().contains(texteFiltre));
-                    boolean matchStatut = statutFiltre == null || (station.getStatut() != null && station.getStatut() == statutFiltre);
+                            (station.getLocalisation() != null
+                                    && station.getLocalisation().toLowerCase().contains(texteFiltre));
+                    boolean matchStatut = statutFiltre == null
+                            || (station.getStatut() != null && station.getStatut() == statutFiltre);
                     return matchTexte && matchStatut;
                 })
                 .collect(Collectors.toList());
@@ -342,20 +363,24 @@ public class MainAppFrame extends JFrame {
 
     // Méthodes CRUD (seulement disponibles pour utilisateurs authentifiés)
     private void ouvrirDialogueStation(Station stationAModifier) {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated)
+            return;
         StationDialog dialog = new StationDialog(this, stationService, stationAModifier);
         dialog.setVisible(true);
         if (dialog.isSucces()) {
             String action = (stationAModifier == null) ? "ajoutée" : "modifiée";
             chargerDonneesEtFiltrer();
-            statusBar.setText("Station " + action + " avec succès. " + tableModel.getRowCount() + " station(s) affichée(s).");
+            statusBar.setText(
+                    "Station " + action + " avec succès. " + tableModel.getRowCount() + " station(s) affichée(s).");
         }
     }
 
     private void ouvrirDialogueModificationSelectionUnique() {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated)
+            return;
         if (stationTable.getSelectedRowCount() != 1) {
-            JOptionPane.showMessageDialog(this, "Veuillez sélectionner EXACTEMENT une station à modifier.", "Sélection Invalide", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Veuillez sélectionner EXACTEMENT une station à modifier.",
+                    "Sélection Invalide", JOptionPane.WARNING_MESSAGE);
             return;
         }
         int selectedRowView = stationTable.getSelectedRow();
@@ -371,14 +396,15 @@ public class MainAppFrame extends JFrame {
             } else {
                 handleStationNotFoundError();
             }
-        } catch(DataAccessException e) {
+        } catch (DataAccessException e) {
             handleDataAccessException("récupération pour modification", e);
         }
     }
 
     private void ouvrirDialogueDetailsSelectionUnique() {
         if (stationTable.getSelectedRowCount() != 1) {
-            JOptionPane.showMessageDialog(this, "Veuillez sélectionner EXACTEMENT une station pour voir les détails.", "Sélection Invalide", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Veuillez sélectionner EXACTEMENT une station pour voir les détails.",
+                    "Sélection Invalide", JOptionPane.WARNING_MESSAGE);
             return;
         }
         int selectedRowView = stationTable.getSelectedRow();
@@ -395,16 +421,18 @@ public class MainAppFrame extends JFrame {
             } else {
                 handleStationNotFoundError();
             }
-        } catch(DataAccessException e) {
+        } catch (DataAccessException e) {
             handleDataAccessException("consultation des détails", e);
         }
     }
 
     private void supprimerStationsSelectionnees() {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated)
+            return;
         int[] selectedRowsView = stationTable.getSelectedRows();
         if (selectedRowsView.length == 0) {
-            JOptionPane.showMessageDialog(this, "Veuillez sélectionner au moins une station à supprimer.", "Aucune sélection", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Veuillez sélectionner au moins une station à supprimer.",
+                    "Aucune sélection", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -420,8 +448,9 @@ public class MainAppFrame extends JFrame {
             confirmationMessage.append("la station '").append(nom).append("' (ID: ").append(id).append(")?");
             idsToDelete.add(id);
         } else {
-            confirmationMessage.append("les ").append(selectedRowsModel.length).append(" stations sélectionnées ?\nIDs: ");
-            for(int i = 0; i < selectedRowsModel.length; i++) {
+            confirmationMessage.append("les ").append(selectedRowsModel.length)
+                    .append(" stations sélectionnées ?\nIDs: ");
+            for (int i = 0; i < selectedRowsModel.length; i++) {
                 long id = (long) tableModel.getValueAt(selectedRowsModel[i], 0);
                 idsToDelete.add(id);
                 confirmationMessage.append(id).append(i < selectedRowsModel.length - 1 ? ", " : "");
@@ -468,21 +497,26 @@ public class MainAppFrame extends JFrame {
                     resultMessage.append("Détails erreurs:\n");
                     errors.forEach(err -> resultMessage.append("- ").append(err).append("\n"));
                 }
-                JOptionPane.showMessageDialog(this, resultMessage.toString(), "Résultat Suppression", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, resultMessage.toString(), "Résultat Suppression",
+                        JOptionPane.WARNING_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, resultMessage.toString(), "Succès Suppression", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, resultMessage.toString(), "Succès Suppression",
+                        JOptionPane.INFORMATION_MESSAGE);
             }
 
             chargerDonneesEtFiltrer();
-            statusBar.setText(successCount + "/" + idsToDelete.size() + " station(s) supprimée(s). " + tableModel.getRowCount() + " affichée(s).");
+            statusBar.setText(successCount + "/" + idsToDelete.size() + " station(s) supprimée(s). "
+                    + tableModel.getRowCount() + " affichée(s).");
         } else {
             statusBar.setText("Suppression annulée.");
         }
     }
 
     private void changerStatutRapideSelection() {
-        if (!isAuthenticated) return;
-        if (stationTable.getSelectedRowCount() != 1) return;
+        if (!isAuthenticated)
+            return;
+        if (stationTable.getSelectedRowCount() != 1)
+            return;
 
         int selectedRowView = stationTable.getSelectedRow();
         int selectedRowModel = stationTable.convertRowIndexToModel(selectedRowView);
@@ -505,10 +539,13 @@ public class MainAppFrame extends JFrame {
                     boolean updated = stationService.updateStationStatus(idStation, nouveauStatut);
                     if (updated) {
                         tableModel.setValueAt(nouveauStatut.getDescription(), selectedRowModel, 3);
-                        allLoadedStations.stream().filter(s -> s.getId() == idStation).findFirst().ifPresent(s -> s.setStatut(nouveauStatut));
+                        allLoadedStations.stream().filter(s -> s.getId() == idStation).findFirst()
+                                .ifPresent(s -> s.setStatut(nouveauStatut));
                         mettreAJourStatistiques();
-                        statusBar.setText("Statut ID " + idStation + " mis à jour. " + tableModel.getRowCount() + " station(s) affichée(s).");
-                        ((DefaultTableModel)stationTable.getModel()).fireTableRowsUpdated(selectedRowModel, selectedRowModel);
+                        statusBar.setText("Statut ID " + idStation + " mis à jour. " + tableModel.getRowCount()
+                                + " station(s) affichée(s).");
+                        ((DefaultTableModel) stationTable.getModel()).fireTableRowsUpdated(selectedRowModel,
+                                selectedRowModel);
                     } else {
                         handleOperationFailure("mise à jour du statut");
                     }
@@ -517,12 +554,17 @@ public class MainAppFrame extends JFrame {
                 } catch (Exception e) {
                     handleUnexpectedError("mise à jour du statut", e);
                 }
-            } else { statusBar.setText("Statut inchangé."); }
-        } else { statusBar.setText("Changement de statut annulé."); }
+            } else {
+                statusBar.setText("Statut inchangé.");
+            }
+        } else {
+            statusBar.setText("Changement de statut annulé.");
+        }
     }
 
     private void copierInfosSelection() {
-        if (stationTable.getSelectedRowCount() != 1) return;
+        if (stationTable.getSelectedRowCount() != 1)
+            return;
 
         int selectedRowView = stationTable.getSelectedRow();
         int selectedRowModel = stationTable.convertRowIndexToModel(selectedRowView);
@@ -616,7 +658,8 @@ public class MainAppFrame extends JFrame {
                     document.open();
 
                     // Titre du document
-                    com.itextpdf.text.Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BaseColor.BLACK);
+                    com.itextpdf.text.Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18,
+                            BaseColor.BLACK);
                     Paragraph title = new Paragraph("Export des Stations de Charge", titleFont);
                     title.setAlignment(Element.ALIGN_CENTER);
                     title.setSpacingAfter(20);
@@ -632,12 +675,14 @@ public class MainAppFrame extends JFrame {
 
                     // Statistiques
                     Map<String, Long> stats = stationService.getStationStatistics();
-                    com.itextpdf.text.Font statsFont = FontFactory.getFont(FontFactory.HELVETICA, 11, BaseColor.DARK_GRAY);
+                    com.itextpdf.text.Font statsFont = FontFactory.getFont(FontFactory.HELVETICA, 11,
+                            BaseColor.DARK_GRAY);
                     Paragraph statsP = new Paragraph(
                             "Statistiques: Total: " + stats.getOrDefault("TOTAL", 0L) +
                                     " | Disponibles: " + stats.getOrDefault(Statut.DISPONIBLE.name(), 0L) +
                                     " | En Charge: " + stats.getOrDefault(Statut.EN_CHARGE.name(), 0L) +
-                                    " | Hors Service: " + stats.getOrDefault(Statut.HORS_SERVICE.name(), 0L), statsFont);
+                                    " | Hors Service: " + stats.getOrDefault(Statut.HORS_SERVICE.name(), 0L),
+                            statsFont);
                     statsP.setAlignment(Element.ALIGN_CENTER);
                     statsP.setSpacingAfter(20);
                     document.add(statsP);
@@ -645,11 +690,12 @@ public class MainAppFrame extends JFrame {
                     // Tableau des données
                     PdfPTable table = new PdfPTable(5); // 5 colonnes
                     table.setWidthPercentage(100);
-                    table.setWidths(new float[]{1f, 3f, 3f, 2f, 2.5f}); // Largeurs relatives
+                    table.setWidths(new float[] { 1f, 3f, 3f, 2f, 2.5f }); // Largeurs relatives
 
                     // En-têtes
-                    com.itextpdf.text.Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, BaseColor.WHITE);
-                    String[] headers = {"ID", "Nom", "Localisation", "Statut", "Dernière MàJ"};
+                    com.itextpdf.text.Font headerFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10,
+                            BaseColor.WHITE);
+                    String[] headers = { "ID", "Nom", "Localisation", "Statut", "Dernière MàJ" };
                     for (String header : headers) {
                         PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
                         cell.setBackgroundColor(BaseColor.DARK_GRAY);
@@ -720,13 +766,15 @@ public class MainAppFrame extends JFrame {
 
     // --- Méthodes utilitaires ---
     private void handleDataAccessException(String operation, DataAccessException e) {
-        JOptionPane.showMessageDialog(this, "Erreur Base de Données lors de: " + operation + "\n" + e.getMessage(), "Erreur BDD", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Erreur Base de Données lors de: " + operation + "\n" + e.getMessage(),
+                "Erreur BDD", JOptionPane.ERROR_MESSAGE);
         statusBar.setText("Erreur BDD pendant: " + operation);
         e.printStackTrace();
     }
 
     private void handleUnexpectedError(String operation, Exception e) {
-        JOptionPane.showMessageDialog(this, "Erreur Inattendue lors de: " + operation + "\n" + e.getMessage(), "Erreur Inattendue", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Erreur Inattendue lors de: " + operation + "\n" + e.getMessage(),
+                "Erreur Inattendue", JOptionPane.ERROR_MESSAGE);
         statusBar.setText("Erreur inattendue pendant: " + operation);
         e.printStackTrace();
     }
@@ -737,7 +785,8 @@ public class MainAppFrame extends JFrame {
     }
 
     private void handleStationNotFoundError() {
-        JOptionPane.showMessageDialog(this, "La station sélectionnée n'a pas été trouvée (peut-être supprimée?).", "Erreur", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, "La station sélectionnée n'a pas été trouvée (peut-être supprimée?).",
+                "Erreur", JOptionPane.ERROR_MESSAGE);
         chargerDonneesEtFiltrer();
         statusBar.setText("Erreur: Station non trouvée.");
     }

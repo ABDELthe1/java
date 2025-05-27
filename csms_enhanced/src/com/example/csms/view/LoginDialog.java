@@ -122,8 +122,7 @@ public class LoginDialog extends JDialog {
     private void continueAsGuest() {
         int confirmation = JOptionPane.showConfirmDialog(this,
                 "Mode visiteur: Vous pourrez consulter les stations et exporter en PDF,\n" +
-                        "mais vous ne pourrez pas ajouter, modifier ou supprimer des stations.\n\n" +
-                        "Continuer en mode visiteur?",
+                       "Continuer en mode visiteur?",
                 "Confirmation Mode visiteur",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.INFORMATION_MESSAGE);
